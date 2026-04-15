@@ -56,7 +56,8 @@ const ST={
   addingGoal:false,newGoalName:'',addingActTo:null,newActName:'',showHidden:false,
   trackMonth:mKey(new Date()),trackAdding:false,trackNewTitle:'',trackNewSub:'',
   configuring:false,cfgName:'',cfgEmoji:'',cfgLabels:null,
-  kanbanAddTo:null,kanbanTitle:'',kanbanDrag:null,
+  kanbanAddTo:null,kanbanTitle:'',kanbanDrag:null,kanbanEditId:null,kanbanEditTitle:'',
+  goalDrag:null,trackDrag:null,editingCatId:null,editingActId:null,editingCatName:'',editingActName:'',
   qEditing:false,qDraft:null,
   nameEditing:false,
   skipNamePrompt:false,
@@ -161,15 +162,50 @@ function renderGoals(){
     let body='';
     if(cat.expanded){
       const dh=`<div class="day-hdr-row"><div class="day-hdr-spacer"></div><div class="day-hdrs">${DAYS.map((d,i)=>`<span class="day-hdr-cell${wd[i]===t?' today':''}">${d}</span>`).join('')}</div><div class="day-hdr-actions"></div></div>`;
-      const acts=cat.activities.map(act=>{
+      const acts=cat.activities.map((act,aidx)=>{
         const st=streak(act),dc=wd.filter(d=>act.weekLog[d]).length,ah=act.hidden;
+        const canUp=aidx>0,canDown=aidx<cat.activities.length-1;
         const cells=wd.map(date=>{const done=act.weekLog[date];return `<div class="day-cell-wrap"><button class="day-cell${done?' done':''}" data-cat="${e(cat.id)}" data-act="${e(act.id)}" data-date="${date}" ${ah?'disabled':''}>${done?svg('check'):''}</button></div>`;}).join('');
-        return `<div class="act-row"><div class="act-info"><span class="act-name${ah?' blurred':''}">${e(act.name)}</span>${!ah&&st>0?`<span class="act-streak">${svg('flame')}${st}</span>`:''}<span class="act-count">${dc}/7</span></div><div class="act-days">${cells}</div><div class="act-actions"><button class="act-icon-btn" data-ah="${e(cat.id)}" data-aid="${e(act.id)}">${ah?svg('eyeoff'):svg('eye')}</button><button class="act-icon-btn del" data-ad="${e(cat.id)}" data-aid="${e(act.id)}">${svg('trash')}</button></div></div>`;
+        const nameEl=ST.editingActId===act.id
+          ?`<input id="editActInp" class="add-act-inp" value="${e(ST.editingActName)}" style="width:90px;" autofocus/><button class="xs-btn saveactname" data-cat="${e(cat.id)}" data-act="${e(act.id)}" style="margin-left:.25rem;">Save</button><button class="xs-btn muted cancelactname" style="margin-left:.25rem;">✕</button>`
+          :`<span class="act-name${ah?' blurred':''} editactname" data-cat="${e(cat.id)}" data-act="${e(act.id)}" title="Click to edit" style="cursor:text;">${e(act.name)}</span>`;
+        return `<div class="act-row">
+          <div class="act-info">
+            ${nameEl}
+            ${!ah&&st>0&&ST.editingActId!==act.id?`<span class="act-streak">${svg('flame')}${st}</span>`:''}
+            ${ST.editingActId!==act.id?`<span class="act-count">${dc}/7</span>`:''}
+          </div>
+          <div class="act-days">${cells}</div>
+          <div class="act-actions" style="width:70px;">
+            <button class="act-icon-btn amoveup" data-cat="${e(cat.id)}" data-act="${e(act.id)}" title="Move up" style="font-size:9px;opacity:${canUp?'.4':'.1'};" ${canUp?'':'disabled'}>▲</button>
+            <button class="act-icon-btn amovedown" data-cat="${e(cat.id)}" data-act="${e(act.id)}" title="Move down" style="font-size:9px;opacity:${canDown?'.4':'.1'};" ${canDown?'':'disabled'}>▼</button>
+            <button class="act-icon-btn" data-ah="${e(cat.id)}" data-aid="${e(act.id)}">${ah?svg('eyeoff'):svg('eye')}</button>
+            <button class="act-icon-btn del" data-ad="${e(cat.id)}" data-aid="${e(act.id)}">${svg('trash')}</button>
+          </div>
+        </div>`;
       }).join('');
       const addA=ST.addingActTo===cat.id?`<div class="add-act-row"><input id="aActInp" class="add-act-inp" placeholder="Activity name..." value="${e(ST.newActName)}" autofocus/><button class="xs-btn aas" data-cat="${e(cat.id)}">Add</button><button class="xs-btn muted" id="aac">Cancel</button></div>`:`<button class="add-act-btn oaa" data-cat="${e(cat.id)}">${svg('plus')} Add Activity</button>`;
       body=`<div class="goal-body">${dh}<div class="space-y-05">${acts}</div>${addA}</div>`;
     }
-    return `<div class="goal-card${ih?' is-hidden':''}"><div class="goal-card-hdr gc" data-cat="${e(cat.id)}"><div class="goal-hdr-left">${cat.expanded?svg('chevdown'):svg('chevright')}<span class="goal-emoji">${cat.emoji}</span><span class="goal-name">${e(cat.name)}</span>${!ih?`<span class="status-pill ${ot?'on':'off'}">${ot?'On Track':'Off Track'}</span>`:`<span class="status-pill hidden-lbl">Hidden</span>`}</div><div class="goal-hdr-right"><button class="icon-btn ch" data-cat="${e(cat.id)}">${ih?svg('eyeoff'):svg('eye')}</button><button class="icon-btn del cd" data-cat="${e(cat.id)}">${svg('trash')}</button></div></div>${body}</div>`;
+    return `<div class="goal-card${ih?' is-hidden':''} gdrag" draggable="true" data-gid="${e(cat.id)}">
+      <div class="goal-card-hdr gc" data-cat="${e(cat.id)}">
+        <div class="goal-hdr-left">
+          ${cat.expanded?svg('chevdown'):svg('chevright')}
+          <span>${cat.emoji}</span>
+          ${ST.editingCatId===cat.id
+            ? `<input id="editCatInp" class="add-inp" value="${e(ST.editingCatName)}" style="font-size:.875rem;font-weight:600;width:140px;" autofocus/><button class="xs-btn savecatname" data-cat="${e(cat.id)}" style="margin-left:.25rem;">Save</button><button class="xs-btn muted cancelcatname" style="margin-left:.25rem;">✕</button>`
+            : `<span class="goal-name editcatname" data-cat="${e(cat.id)}" title="Click to edit" style="cursor:text;">${e(cat.name)}</span>`
+          }
+          ${!ih&&ST.editingCatId!==cat.id?`<span class="status-pill ${ot?'on':'off'}">${ot?'On Track':'Off Track'}</span>`:''}
+          ${ih?`<span class="status-pill hidden-lbl">Hidden</span>`:''}
+        </div>
+        <div class="goal-hdr-right" style="display:flex;align-items:center;gap:2px;">
+          <button class="icon-btn ch" data-cat="${e(cat.id)}">${ih?svg('eyeoff'):svg('eye')}</button>
+          <button class="icon-btn del cd" data-cat="${e(cat.id)}">${svg('trash')}</button>
+        </div>
+      </div>
+      ${body}
+    </div>`;
   }).join('');
   return `<div><div class="section-hdr"><span class="section-title">Goals</span><div style="display:flex;align-items:center;gap:.75rem;">${hc>0?`<button id="tgh" class="hidden-btn${ST.showHidden?' active':''}">${ST.showHidden?svg('eye'):svg('eyeoff')} ${hc} hidden</button>`:''}<button id="oag" class="link-btn">${svg('plus')} Add Goal</button></div></div>${ST.addingGoal?`<div class="add-row"><input id="ngi" class="add-inp" placeholder="Goal category name..." value="${e(ST.newGoalName)}" autofocus/><button id="ags" class="xs-btn">Add</button><button id="agc" class="xs-btn muted">Cancel</button></div>`:''}<div>${cards}</div></div>`;
 }
@@ -182,7 +218,7 @@ function renderTrack(){
     const cl=ST.cfgLabels||cfg.labels;
     cp=`<div class="cfg-panel"><div class="cfg-panel-hdr"><span class="cfg-panel-title">Customize List</span><button id="cpc" class="close-btn">${svg('x')}</button></div><div class="preset-chips">${Object.entries(PRESETS).map(([k,p])=>`<button class="preset-chip${cfg.name===p.name?' active':''} pc" data-p="${k}">${p.emoji} ${p.name}</button>`).join('')}</div><div class="custom-sep"><div class="custom-label">Or customize</div><div class="custom-row"><input id="cei" class="emoji-inp" maxlength="2" value="${e(ST.cfgEmoji||cfg.emoji)}"/><input id="cni" class="lbl-inp" placeholder="List name..." value="${e(ST.cfgName||cfg.name)}"/></div><div class="labels-grid">${so.map(s=>`<input class="lbl-inp clbl" data-s="${s}" value="${e(cl[s])}"/>`).join('')}</div><button id="scc" class="xs-btn">Save Custom</button></div></div>`;
   }
-  const ih=mi.length===0&&!ST.trackAdding?`<p class="track-empty">Nothing here yet</p>`:mi.map(it=>`<div class="track-item"><div class="t-icon ${sc[it.status]}">${svg(si[it.status])}</div><div class="t-info"><div class="t-title">${e(it.title)}</div>${it.subtitle?`<div class="t-sub">${e(it.subtitle)}</div>`:''}</div><select class="t-select tss" data-id="${it.id}">${so.map(s=>`<option value="${s}"${it.status===s?' selected':''}>${e(cfg.labels[s])}</option>`).join('')}</select><button class="t-del tdel" data-id="${it.id}">${svg('trash')}</button></div>`).join('');
+  const ih=mi.length===0&&!ST.trackAdding?`<p class="track-empty">Nothing here yet</p>`:mi.map(it=>`<div class="track-item tdrag" draggable="true" data-tid="${it.id}"><div class="t-icon ${sc[it.status]}">${svg(si[it.status])}</div><div class="t-info"><div class="t-title">${e(it.title)}</div>${it.subtitle?`<div class="t-sub">${e(it.subtitle)}</div>`:''}</div><select class="t-select tss" data-id="${it.id}">${so.map(s=>`<option value="${s}"${it.status===s?' selected':''}>${e(cfg.labels[s])}</option>`).join('')}</select><button class="t-del tdel" data-id="${it.id}">${svg('trash')}</button></div>`).join('');
   return `<div><div class="track-hdr"><div class="track-title"><span class="track-emoji">${e(cfg.emoji)}</span><span class="section-title">${e(cfg.name)}</span></div><div style="display:flex;align-items:center;gap:.5rem;"><button id="ocfg" class="cfg-btn">${svg('settings')}</button>${!ST.trackAdding&&!ST.configuring?`<button id="oai" class="link-btn">${svg('plus')} Add</button>`:''}</div></div>${cp}<div class="month-nav"><button id="pm" class="month-nav-btn">${svg('chevleft')}</button><span class="month-label">${fmtM(ST.trackMonth)}</span><button id="nm" class="month-nav-btn">${svg('chevright')}</button></div><div>${ih}</div>${ST.trackAdding?`<div class="add-form"><input id="ntt" class="form-inp" placeholder="Title..." autofocus/><input id="nts" class="form-inp" placeholder="Subtitle (optional)"/><div class="form-btns"><button id="ais" class="xs-btn">Add</button><button id="aic" class="xs-btn muted">Cancel</button></div></div>`:''}</div>`;
 }
 
@@ -190,7 +226,20 @@ function renderKanban(){
   const tasks=getK(),cols=[{id:'todo',name:'To Do'},{id:'inprog',name:'In Progress'},{id:'done',name:'Done'}];
   const ch=cols.map(col=>{
     const ct=tasks.filter(t=>t.column===col.name);
-    const th=ct.map(t=>`<div class="k-task${ST.kanbanDrag===t.id?' dragging':''}" draggable="true" data-tid="${t.id}"><div class="k-grip">${svg('grip')}</div><p class="k-text${col.name==='Done'?' done-txt':''}">${e(t.title)}</p><button class="k-del kdel" data-id="${t.id}">${svg('trash')}</button></div>`).join('');
+    const th=ct.map((t,idx)=>{
+      if(ST.kanbanEditId===t.id){
+        return `<div class="k-task" style="cursor:default;">
+          <input id="kedit" class="k-inp" value="${e(t.title)}" style="flex:1;" autofocus/>
+          <button class="xs-btn ksaveedit" data-id="${t.id}" style="margin-left:.4rem;">Save</button>
+          <button class="xs-btn muted" id="kcanceledit" style="margin-left:.25rem;">✕</button>
+        </div>`;
+      }
+      return `<div class="k-task${ST.kanbanDrag===t.id?' dragging':''}" draggable="true" data-tid="${t.id}" data-col="${e(col.name)}">
+        <div class="k-grip">${svg('grip')}</div>
+        <p class="k-text${col.name==='Done'?' done-txt':''} keditopen" data-id="${t.id}" style="cursor:pointer;" title="Click to edit">${e(t.title)}</p>
+        <button class="k-del kdel" data-id="${t.id}" style="margin-left:.25rem;">${svg('trash')}</button>
+      </div>`;
+    }).join('');
     const af=ST.kanbanAddTo===col.name?`<div class="k-add-form"><input id="kinp" class="k-inp" placeholder="Task title..." value="${e(ST.kanbanTitle)}" autofocus/><div class="k-form-btns"><button class="xs-btn ks" data-col="${e(col.name)}">Add</button><button id="kc" class="xs-btn muted">Cancel</button></div></div>`:'';
     return `<div class="k-col ${col.id} kcol" data-col="${e(col.name)}"><div class="k-col-hdr"><div class="k-col-title"><span class="k-col-name">${col.name}</span><span class="k-col-count">${ct.length}</span></div><button class="k-add-btn kadd" data-col="${e(col.name)}">${svg('plus')}</button></div><div>${th}${af}</div></div>`;
   }).join('');
@@ -316,6 +365,74 @@ function bind(){
     e.target.style.width=Math.max(e.target.value.length||9,5)+'ch';
   });
 
+  // ── Kanban edit ──
+  all('.keditopen','click',e=>{e.stopPropagation();const id=e.currentTarget.dataset.id;const t=getK().find(t=>t.id===id);ST.kanbanEditId=id;ST.kanbanEditTitle=t?.title||'';render();setTimeout(()=>document.getElementById('kedit')?.focus(),0);});
+  all('.ksaveedit','click',e=>{const id=e.currentTarget.dataset.id;const v=document.getElementById('kedit')?.value.trim();if(v)setK(getK().map(t=>t.id===id?{...t,title:v}:t));ST.kanbanEditId=null;render();});
+  on('kcanceledit','click',()=>{ST.kanbanEditId=null;render();});
+  on('kedit','keydown',e=>{if(e.key==='Enter')document.querySelector('.ksaveedit')?.click();if(e.key==='Escape'){ST.kanbanEditId=null;render();}});
+
+  // ── Kanban drag (across columns + reorder within column) ──
+  all('.k-task','dragstart',e=>{ST.kanbanDrag=e.currentTarget.dataset.tid;});
+  all('.kcol','dragover',e=>{e.preventDefault();});
+  all('.k-task','dragover',e=>{e.preventDefault();e.stopPropagation();ST.kanbanDragOver=e.currentTarget.dataset.tid;});
+  all('.k-task','drop',e=>{
+    e.stopPropagation();
+    if(!ST.kanbanDrag||ST.kanbanDrag===e.currentTarget.dataset.tid)return;
+    const tasks=getK();
+    const fromIdx=tasks.findIndex(t=>t.id===ST.kanbanDrag);
+    const toIdx=tasks.findIndex(t=>t.id===e.currentTarget.dataset.tid);
+    const col=tasks[toIdx].column;
+    const moved={...tasks[fromIdx],column:col};
+    tasks.splice(fromIdx,1);tasks.splice(toIdx,0,moved);
+    setK(tasks);ST.kanbanDrag=null;render();
+  });
+  all('.kcol','drop',e=>{
+    if(!ST.kanbanDrag)return;
+    const col=e.currentTarget.dataset.col;
+    const tasks=getK();
+    const fromIdx=tasks.findIndex(t=>t.id===ST.kanbanDrag);
+    if(tasks[fromIdx].column===col&&!ST.kanbanDragOver){setK(tasks);}
+    else{tasks[fromIdx]={...tasks[fromIdx],column:col};setK(tasks);}
+    ST.kanbanDrag=null;ST.kanbanDragOver=null;render();
+  });
+
+  // ── Goal drag to reorder ──
+  all('.gdrag','dragstart',e=>{e.stopPropagation();ST.goalDrag=e.currentTarget.dataset.gid;});
+  all('.gdrag','dragover',e=>{e.preventDefault();e.stopPropagation();});
+  all('.gdrag','drop',e=>{
+    e.preventDefault();e.stopPropagation();
+    if(!ST.goalDrag||ST.goalDrag===e.currentTarget.dataset.gid)return;
+    const g=getG();
+    const fromIdx=g.findIndex(c=>c.id===ST.goalDrag);
+    const toIdx=g.findIndex(c=>c.id===e.currentTarget.dataset.gid);
+    const moved=g.splice(fromIdx,1)[0];g.splice(toIdx,0,moved);
+    setG(g);ST.goalDrag=null;render();
+  });
+
+  // ── Goal name edit ──
+  all('.editcatname','click',e=>{e.stopPropagation();const id=e.currentTarget.dataset.cat;const cat=getG().find(c=>c.id===id);ST.editingCatId=id;ST.editingCatName=cat?.name||'';render();setTimeout(()=>document.getElementById('editCatInp')?.focus(),0);});
+  all('.savecatname','click',e=>{e.stopPropagation();const id=e.currentTarget.dataset.cat;const v=document.getElementById('editCatInp')?.value.trim();if(v)setG(getG().map(c=>c.id===id?{...c,name:v}:c));ST.editingCatId=null;render();});
+  all('.cancelcatname','click',e=>{e.stopPropagation();ST.editingCatId=null;render();});
+  on('editCatInp','keydown',e=>{if(e.key==='Enter')document.querySelector('.savecatname')?.click();if(e.key==='Escape'){ST.editingCatId=null;render();}});
+
+  // ── Activity name edit ──
+  all('.editactname','click',e=>{e.stopPropagation();const{cat,act}=e.currentTarget.dataset;const a=getG().find(c=>c.id===cat)?.activities.find(a=>a.id===act);ST.editingActId=act;ST.editingActName=a?.name||'';render();setTimeout(()=>document.getElementById('editActInp')?.focus(),0);});
+  all('.saveactname','click',e=>{e.stopPropagation();const{cat,act}=e.currentTarget.dataset;const v=document.getElementById('editActInp')?.value.trim();if(v)setG(getG().map(c=>c.id===cat?{...c,activities:c.activities.map(a=>a.id===act?{...a,name:v}:a)}:c));ST.editingActId=null;render();});
+  all('.cancelactname','click',e=>{e.stopPropagation();ST.editingActId=null;render();});
+  on('editActInp','keydown',e=>{if(e.key==='Enter')document.querySelector('.saveactname')?.click();if(e.key==='Escape'){ST.editingActId=null;render();}});
+
+  // ── Goal move up/down removed — using drag instead ──
+
+  // ── Activity move up/down ──
+  all('.amoveup','click',e=>{
+    e.stopPropagation();const{cat,act}=e.currentTarget.dataset;
+    setG(getG().map(c=>{if(c.id!==cat)return c;const acts=[...c.activities];const idx=acts.findIndex(a=>a.id===act);if(idx<=0)return c;[acts[idx],acts[idx-1]]=[acts[idx-1],acts[idx]];return{...c,activities:acts};}));render();
+  });
+  all('.amovedown','click',e=>{
+    e.stopPropagation();const{cat,act}=e.currentTarget.dataset;
+    setG(getG().map(c=>{if(c.id!==cat)return c;const acts=[...c.activities];const idx=acts.findIndex(a=>a.id===act);if(idx>=acts.length-1)return c;[acts[idx],acts[idx+1]]=[acts[idx+1],acts[idx]];return{...c,activities:acts};}));render();
+  });
+
   on('mp','click',()=>{ST.mode='personal';LS.setRaw('dashboard-mode','personal');render();});
   on('mpr','click',()=>{ST.mode='professional';LS.setRaw('dashboard-mode','professional');render();});
   on('tipP','click',e=>{e.stopPropagation();ST.defaultMode='personal';LS.setRaw('dashboard-default-mode','personal');LS.setRaw('dashboard-mode','personal');render();});
@@ -352,6 +469,20 @@ function bind(){
   on('aic','click',()=>{ST.trackAdding=false;render();});
   on('ntt','keydown',e=>{if(e.key==='Enter')$('ais')?.click();});
   on('nts','keydown',e=>{if(e.key==='Enter')$('ais')?.click();});
+  // ── Tracking list drag to reorder ──
+  all('.tdrag','dragstart',e=>{ST.trackDrag=e.currentTarget.dataset.tid;});
+  all('.tdrag','dragover',e=>{e.preventDefault();e.stopPropagation();});
+  all('.tdrag','drop',e=>{
+    e.preventDefault();e.stopPropagation();
+    if(!ST.trackDrag||ST.trackDrag===e.currentTarget.dataset.tid)return;
+    const items=getIt();
+    const fromIdx=items.findIndex(i=>i.id===ST.trackDrag);
+    const toIdx=items.findIndex(i=>i.id===e.currentTarget.dataset.tid);
+    const moved=items.splice(fromIdx,1)[0];
+    items.splice(toIdx,0,moved);
+    setIt(items);ST.trackDrag=null;render();
+  });
+
   all('.tss','change',e=>{const id=e.currentTarget.dataset.id;setIt(getIt().map(b=>b.id===id?{...b,status:e.currentTarget.value}:b));render();});
   all('.tdel','click',e=>{setIt(getIt().filter(b=>b.id!==e.currentTarget.dataset.id));render();});
 
@@ -361,10 +492,6 @@ function bind(){
   on('kinp','keydown',e=>{if(e.key==='Enter')document.querySelector('.ks')?.click();if(e.key==='Escape'){ST.kanbanAddTo=null;render();}});
   all('.kdel','click',e=>{setK(getK().filter(t=>t.id!==e.currentTarget.dataset.id));render();});
   on('kr','click',()=>{const tasks=getK();if(!tasks.length)return;if(!confirm('Archive all tasks and clear the board?'))return;const h=getKH();h.unshift({month:mKey(new Date()),archivedAt:new Date().toISOString(),tasks:[...tasks]});setKH(h);setK([]);render();});
-  all('.k-task','dragstart',e=>{ST.kanbanDrag=e.currentTarget.dataset.tid;});
-  all('.kcol','dragover',e=>e.preventDefault());
-  all('.kcol','drop',e=>{if(!ST.kanbanDrag)return;const col=e.currentTarget.dataset.col;setK(getK().map(t=>t.id===ST.kanbanDrag?{...t,column:col}:t));ST.kanbanDrag=null;render();});
-
   on('ht','click',()=>{ST.histExpanded=!ST.histExpanded;render();});
   all('.hmt','click',e=>{const k=e.currentTarget.dataset.key;ST.histMonths[k]=!ST.histMonths[k];render();});
 }
