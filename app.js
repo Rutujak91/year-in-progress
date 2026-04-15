@@ -44,6 +44,12 @@ const PRESETS={
   movies:{name:'Watch List',emoji:'🎬',labels:{active:'Watching',completed:'Watched',upcoming:'Up Next'}},
   courses:{name:'Courses',emoji:'🎓',labels:{active:'Learning',completed:'Completed',upcoming:'Queued'}},
 };
+const TAGS=[
+  {id:'urgent',  label:'Urgent',    color:'#ef4444',bg:'#fef2f2',emoji:'🔴'},
+  {id:'deepwork',label:'Deep Work', color:'#8b5cf6',bg:'#f5f3ff',emoji:'🧠'},
+  {id:'quickwin',label:'Quick Win', color:'#10b981',bg:'#f0fdf4',emoji:'⚡'},
+  {id:'waiting', label:'Waiting',   color:'#6b7280',bg:'#f9fafb',emoji:'🤝'},
+];
 const DG=[
   {id:'1',name:'Physical Fitness',emoji:'💪',expanded:true,hidden:false,activities:[{id:'a1',name:'Gym',weekLog:{}},{id:'a2',name:'10k Steps',weekLog:{}},{id:'a3',name:'Strength Train',weekLog:{}}]},
   {id:'2',name:'Mindfulness',emoji:'🧘',expanded:false,hidden:false,activities:[{id:'a4',name:'Be Present',weekLog:{}},{id:'a5',name:'Meditate',weekLog:{}}]},
@@ -57,6 +63,7 @@ const ST={
   trackMonth:mKey(new Date()),trackAdding:false,trackNewTitle:'',trackNewSub:'',
   configuring:false,cfgName:'',cfgEmoji:'',cfgLabels:null,
   kanbanAddTo:null,kanbanTitle:'',kanbanDrag:null,kanbanEditId:null,kanbanEditTitle:'',
+  kanbanTagOpen:null,
   goalDrag:null,trackDrag:null,editingCatId:null,editingActId:null,editingCatName:'',editingActName:'',
   qEditing:false,qDraft:null,
   nameEditing:false,
@@ -235,9 +242,23 @@ function renderKanban(){
         </div>`;
       }
       return `<div class="k-task${ST.kanbanDrag===t.id?' dragging':''}" draggable="true" data-tid="${t.id}" data-col="${e(col.name)}">
-        <div class="k-grip">${svg('grip')}</div>
-        <p class="k-text${col.name==='Done'?' done-txt':''} keditopen" data-id="${t.id}" style="cursor:pointer;" title="Click to edit">${e(t.title)}</p>
-        <button class="k-del kdel" data-id="${t.id}" style="margin-left:.25rem;">${svg('trash')}</button>
+        <div style="display:flex;align-items:flex-start;gap:.4rem;width:100%;">
+          <div class="k-grip" style="margin-top:3px;">${svg('grip')}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.4rem;">
+              <p class="k-text${col.name==='Done'?' done-txt':''} keditopen" data-id="${t.id}" style="cursor:pointer;margin:0;flex:1;" title="Click to edit">${e(t.title)}</p>
+              <button class="k-del kdel" data-id="${t.id}" style="flex-shrink:0;margin-top:1px;">${svg('trash')}</button>
+            </div>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:5px;">
+              ${(t.tags||[]).map(tid=>{const tg=TAGS.find(x=>x.id===tid);return tg?`<span class="ktag-pill" data-id="${t.id}" data-tag="${tg.id}" style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:99px;background:${tg.bg};color:${tg.color};cursor:pointer;white-space:nowrap;" title="Remove">${tg.emoji} ${tg.label}</span>`:'';}).join('')}
+              <button class="ktag-open" data-id="${t.id}" style="font-size:14px;font-weight:300;color:var(--primary);opacity:.6;background:none;border:none;cursor:pointer;padding:0;flex-shrink:0;line-height:1;" title="Add tag">+</button>
+            </div>
+            ${ST.kanbanTagOpen===t.id?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding:5px 6px;background:var(--bg);border:1px solid var(--border);border-radius:.5rem;box-shadow:var(--shadow);">
+              ${TAGS.map(tg=>{const active=(t.tags||[]).includes(tg.id);return`<button class="ktag-toggle" data-id="${t.id}" data-tag="${tg.id}" style="font-size:10px;font-weight:500;padding:2px 7px;border-radius:99px;border:1.5px solid ${tg.color};background:${active?tg.bg:'transparent'};color:${tg.color};cursor:pointer;">${tg.emoji} ${tg.label}</button>`;}).join('')}
+              <button class="ktag-close" data-id="${t.id}" style="font-size:10px;color:var(--muted-fg);background:none;border:none;cursor:pointer;margin-left:auto;padding:0 2px;">Done</button>
+            </div>`:''}
+          </div>
+        </div>
       </div>`;
     }).join('');
     const af=ST.kanbanAddTo===col.name?`<div class="k-add-form"><input id="kinp" class="k-inp" placeholder="Task title..." value="${e(ST.kanbanTitle)}" autofocus/><div class="k-form-btns"><button class="xs-btn ks" data-col="${e(col.name)}">Add</button><button id="kc" class="xs-btn muted">Cancel</button></div></div>`:'';
@@ -366,6 +387,26 @@ function bind(){
   });
 
   // ── Kanban edit ──
+  // ── Task tags ──
+  all('.ktag-open','click',e=>{e.stopPropagation();const id=e.currentTarget.dataset.id;ST.kanbanTagOpen=ST.kanbanTagOpen===id?null:id;render();});
+  all('.ktag-close','click',e=>{e.stopPropagation();ST.kanbanTagOpen=null;render();});
+  all('.ktag-toggle','click',e=>{
+    e.stopPropagation();
+    const{id,tag}=e.currentTarget.dataset;
+    setK(getK().map(t=>{
+      if(t.id!==id)return t;
+      const tags=t.tags||[];
+      return{...t,tags:tags.includes(tag)?tags.filter(x=>x!==tag):[...tags,tag]};
+    }));
+    render();
+  });
+  all('.ktag-pill','click',e=>{
+    e.stopPropagation();
+    const{id,tag}=e.currentTarget.dataset;
+    setK(getK().map(t=>t.id!==id?t:{...t,tags:(t.tags||[]).filter(x=>x!==tag)}));
+    render();
+  });
+
   all('.keditopen','click',e=>{e.stopPropagation();const id=e.currentTarget.dataset.id;const t=getK().find(t=>t.id===id);ST.kanbanEditId=id;ST.kanbanEditTitle=t?.title||'';render();setTimeout(()=>document.getElementById('kedit')?.focus(),0);});
   all('.ksaveedit','click',e=>{const id=e.currentTarget.dataset.id;const v=document.getElementById('kedit')?.value.trim();if(v)setK(getK().map(t=>t.id===id?{...t,title:v}:t));ST.kanbanEditId=null;render();});
   on('kcanceledit','click',()=>{ST.kanbanEditId=null;render();});
