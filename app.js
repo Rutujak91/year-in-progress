@@ -61,6 +61,7 @@ const ST={
   defaultMode:LS.raw('dashboard-default-mode')||'personal',
   addingGoal:false,newGoalName:'',addingActTo:null,newActName:'',showHidden:false,
   trackMonth:mKey(new Date()),trackAdding:false,trackNewTitle:'',trackNewSub:'',
+  trackEditId:null,trackEditTitle:'',trackEditSub:'',
   configuring:false,cfgName:'',cfgEmoji:'',cfgLabels:null,
   kanbanAddTo:null,kanbanTitle:'',kanbanDrag:null,kanbanEditId:null,kanbanEditTitle:'',
   kanbanTagOpen:null,
@@ -225,7 +226,27 @@ function renderTrack(){
     const cl=ST.cfgLabels||cfg.labels;
     cp=`<div class="cfg-panel"><div class="cfg-panel-hdr"><span class="cfg-panel-title">Customize List</span><button id="cpc" class="close-btn">${svg('x')}</button></div><div class="preset-chips">${Object.entries(PRESETS).map(([k,p])=>`<button class="preset-chip${cfg.name===p.name?' active':''} pc" data-p="${k}">${p.emoji} ${p.name}</button>`).join('')}</div><div class="custom-sep"><div class="custom-label">Or customize</div><div class="custom-row"><input id="cei" class="emoji-inp" maxlength="2" value="${e(ST.cfgEmoji||cfg.emoji)}"/><input id="cni" class="lbl-inp" placeholder="List name..." value="${e(ST.cfgName||cfg.name)}"/></div><div class="labels-grid">${so.map(s=>`<input class="lbl-inp clbl" data-s="${s}" value="${e(cl[s])}"/>`).join('')}</div><button id="scc" class="xs-btn">Save Custom</button></div></div>`;
   }
-  const ih=mi.length===0&&!ST.trackAdding?`<p class="track-empty">Nothing here yet</p>`:mi.map(it=>`<div class="track-item tdrag" draggable="true" data-tid="${it.id}"><div class="t-icon ${sc[it.status]}">${svg(si[it.status])}</div><div class="t-info"><div class="t-title">${e(it.title)}</div>${it.subtitle?`<div class="t-sub">${e(it.subtitle)}</div>`:''}</div><select class="t-select tss" data-id="${it.id}">${so.map(s=>`<option value="${s}"${it.status===s?' selected':''}>${e(cfg.labels[s])}</option>`).join('')}</select><button class="t-del tdel" data-id="${it.id}">${svg('trash')}</button></div>`).join('');
+  const ih=mi.length===0&&!ST.trackAdding?`<p class="track-empty">Nothing here yet</p>`:mi.map(it=>{
+    if(ST.trackEditId===it.id){
+      return `<div class="track-item" style="flex-direction:column;align-items:stretch;gap:.4rem;">
+        <input id="teditTitle" class="form-inp" value="${e(it.title)}" placeholder="Title..." autofocus/>
+        <input id="teditSub" class="form-inp" value="${e(it.subtitle||'')}" placeholder="Subtitle (optional)"/>
+        <div class="form-btns">
+          <button id="teditSave" class="xs-btn" data-id="${it.id}">Save</button>
+          <button id="teditCancel" class="xs-btn muted">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="track-item tdrag" draggable="true" data-tid="${it.id}">
+      <div class="t-icon ${sc[it.status]}">${svg(si[it.status])}</div>
+      <div class="t-info" style="cursor:pointer;" title="Click to edit">
+        <div class="t-title tedit-open" data-id="${it.id}">${e(it.title)}</div>
+        ${it.subtitle?`<div class="t-sub tedit-open" data-id="${it.id}">${e(it.subtitle)}</div>`:''}
+      </div>
+      <select class="t-select tss" data-id="${it.id}">${so.map(s=>`<option value="${s}"${it.status===s?' selected':''}>${e(cfg.labels[s])}</option>`).join('')}</select>
+      <button class="t-del tdel" data-id="${it.id}">${svg('trash')}</button>
+    </div>`;
+  }).join('');
   return `<div><div class="track-hdr"><div class="track-title"><span class="track-emoji">${e(cfg.emoji)}</span><span class="section-title">${e(cfg.name)}</span></div><div style="display:flex;align-items:center;gap:.5rem;"><button id="ocfg" class="cfg-btn">${svg('settings')}</button>${!ST.trackAdding&&!ST.configuring?`<button id="oai" class="link-btn">${svg('plus')} Add</button>`:''}</div></div>${cp}<div class="month-nav"><button id="pm" class="month-nav-btn">${svg('chevleft')}</button><span class="month-label">${fmtM(ST.trackMonth)}</span><button id="nm" class="month-nav-btn">${svg('chevright')}</button></div><div>${ih}</div>${ST.trackAdding?`<div class="add-form"><input id="ntt" class="form-inp" placeholder="Title..." autofocus/><input id="nts" class="form-inp" placeholder="Subtitle (optional)"/><div class="form-btns"><button id="ais" class="xs-btn">Add</button><button id="aic" class="xs-btn muted">Cancel</button></div></div>`:''}</div>`;
 }
 
@@ -523,6 +544,24 @@ function bind(){
     items.splice(toIdx,0,moved);
     setIt(items);ST.trackDrag=null;render();
   });
+
+  // ── Track item inline edit ──
+  all('.tedit-open','click',e=>{
+    e.stopPropagation();const id=e.currentTarget.dataset.id;
+    const it=getIt().find(i=>i.id===id);
+    ST.trackEditId=id;ST.trackEditTitle=it?.title||'';ST.trackEditSub=it?.subtitle||'';
+    render();setTimeout(()=>document.getElementById('teditTitle')?.focus(),0);
+  });
+  on('teditSave','click',e=>{
+    const id=e.currentTarget.dataset.id;
+    const t=document.getElementById('teditTitle')?.value.trim();
+    const s=document.getElementById('teditSub')?.value.trim()||'';
+    if(t)setIt(getIt().map(i=>i.id===id?{...i,title:t,subtitle:s}:i));
+    ST.trackEditId=null;render();
+  });
+  on('teditCancel','click',()=>{ST.trackEditId=null;render();});
+  on('teditTitle','keydown',e=>{if(e.key==='Enter')document.getElementById('teditSave')?.click();if(e.key==='Escape'){ST.trackEditId=null;render();}});
+  on('teditSub','keydown',e=>{if(e.key==='Enter')document.getElementById('teditSave')?.click();if(e.key==='Escape'){ST.trackEditId=null;render();}});
 
   all('.tss','change',e=>{const id=e.currentTarget.dataset.id;setIt(getIt().map(b=>b.id===id?{...b,status:e.currentTarget.value}:b));render();});
   all('.tdel','click',e=>{setIt(getIt().filter(b=>b.id!==e.currentTarget.dataset.id));render();});
